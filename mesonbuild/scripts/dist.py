@@ -47,6 +47,29 @@ def create_zip(zipfilename, packaging_dir):
                 fname = os.path.join(root, f)
                 zf.write(fname, fname[removelen:])
 
+def del_gitfiles(dirname):
+    for f in glob(os.path.join(dirname, '.git*')):
+        if os.path.isdir(f):
+            shutil.rmtree(f)
+        else:
+            os.unlink(f)
+
+def process_submodules(dirname):
+    module_file = os.path.join(dirname, '.gitmodules')
+    if not os.path.exists(module_file):
+        return
+    subprocess.check_call(['git', 'submodule', 'update', '--init'], cwd=dirname)
+    for line in open(module_file):
+        line = line.strip()
+        if '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        k = k.split()
+        v = v.split()
+        if k != 'path':
+            continue
+        del_gitfiles(os.path.join(dirname, v))
+
 def create_dist(dist_name, src_root, bld_root, dist_sub):
     distdir = os.path.join(dist_sub, dist_name)
     gitdir = os.path.join(src_root, '.git')
@@ -56,9 +79,8 @@ def create_dist(dist_name, src_root, bld_root, dist_sub):
     dest_gitdir = os.path.join(distdir, '.git')
     shutil.copytree(gitdir, dest_gitdir)
     subprocess.check_call(['git', 'reset', '--hard'], cwd=distdir)
-    shutil.rmtree(dest_gitdir)
-    for f in glob(os.path.join(distdir, '.git*')):
-        os.unlink(f)
+    process_submodules(distdir)
+    del_gitfiles(distdir)
     xzname = distdir + '.tar.xz'
     zipname = distdir + '.zip'
     # Should use shutil but it got xz support only in 3.5.
